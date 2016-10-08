@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -e
+set -x
+
+# custom build for googletest - we don't want to depend upon cmake, autoconf, etc.
+
+eval export GCC_BIN=\$GCC_${QBT_ENV_GCC:-5_3}_BIN
+export GCC_FLAGS="-Wall -Werror -fPIC -v -DPACKAGE_NAME='$PACKAGE_NAME' -DPACKAGE_CUMULATIVE_VERSION='$PACKAGE_CUMULATIVE_VERSION'"
+
+# first copy the source from the src package
+cp -rp $INPUT_ARTIFACTS_DIR/strong/google_googletest.googletest_src build
+
+mkdir -p $OUTPUT_ARTIFACTS_DIR/{libs,includes}
+
+# first put our includes in the right spot
+rsync -vaH --prune-empty-dirs --include '*/' --include '*.h' --include '*.hpp' --exclude '*' $(pwd)/build/include/ $OUTPUT_ARTIFACTS_DIR/includes/
+
+
+# now grab our source and includes
+GCC_INCLUDES="-I$OUTPUT_ARTIFACTS_DIR/includes -I$(pwd)/build"
+
+GCC_SOURCES="build/src/gtest_main.cc"
+#for i in $(find build/src -type f -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' -o -name '*.c++'); do
+#    export GCC_SOURCES="$GCC_SOURCES $i"
+#done
+
+# now compile our .o file
+$GCC_BIN $GCC_FLAGS $GCC_INCLUDES -o $OUTPUT_ARTIFACTS_DIR/libs/$PACKAGE_NAME.o $GCC_SOURCES
+
