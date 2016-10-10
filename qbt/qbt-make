@@ -1,0 +1,68 @@
+#!/bin/bash
+
+set -e
+set -x
+
+# custom build for googletest - we don't want to depend upon cmake, autoconf, etc.
+
+eval export GCC_BIN=\$GCC_${QBT_ENV_GCC:-5_3}_BIN
+export GCC_FLAGS="-Wall -Werror -fPIC -v -DPACKAGE_NAME='$PACKAGE_NAME' -DPACKAGE_CUMULATIVE_VERSION='$PACKAGE_CUMULATIVE_VERSION'"
+export CC=$GCC_BIN
+
+export SRC_DIR="$INPUT_ARTIFACTS_DIR/strong/google_googletest.source"
+# confirm cmake is available
+CMAKE_BIN=$(which cmake)
+if [[ ! -x "$CMAKE_BIN" ]]; then
+    echo "cmake not found on path" &1>2
+    exit 1
+fi
+
+rm -rf build
+
+for i in googletest googlemock; do
+    mkdir -p build/$i
+    cd build/$i
+
+    # if we are building the test package, run tests
+    if [[ "$PACKAGE_NAME" =~ "google_googletest.test" ]]; then
+        echo "Building $i with tests..."
+        # invoke cmake and make
+        cmake -Dgtest_build_samples=ON \
+              -Dgmock_build_samples=ON \
+              -Dgtest_build_tests=ON \
+              -Dgmock_build_tests=ON \
+              -DCMAKE_CXX_FLAGS=$CXX_FLAGS \
+              $SRC_DIR/$i
+        make
+        CTEST_OUTPUT_ON_FAILURE=1 make test
+    else
+        echo "Building $i"
+        # otherwise, don't build tests
+        cmake -Dgtest_build_samples=OFF \
+              -Dgmock_build_samples=OFF \
+              -Dgtest_build_tests=OFF \
+              -Dgmock_build_tests=OFF \
+              -DCMAKE_CXX_FLAGS=$CXX_FLAGS \
+              $SRC_DIR/$i
+        make
+
+    fi
+    cd ../..
+done
+
+if [[ "$PACKAGE_NAME" =~ "google_googletest.test" ]]; then
+    exit 0
+fi
+
+mkdir -p $OUTPUT_ARTIFACTS_DIR/{libs,includes}
+
+# save header files
+rsync -vaH --prune-empty-dirs --include '*/' --include '*.h' --include '*.hpp' --exclude '*' $SRC_DIR/googletest/include/ $OUTPUT_ARTIFACTS_DIR/includes/
+rsync -vaH --prune-empty-dirs --include '*/' --include '*.h' --include '*.hpp' --exclude '*' $SRC_DIR/googlemock/include/ $OUTPUT_ARTIFACTS_DIR/includes/
+
+# save artifacts
+cp build/googletest/libgtest.a $OUTPUT_ARTIFACTS_DIR/libs/
+cp build/googlemock/libgmock.a $OUTPUT_ARTIFACTS_DIR/libs/
+
+
+

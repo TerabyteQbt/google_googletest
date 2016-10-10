@@ -1,0 +1,2 @@
+Include "cmake" instead of using external dependency?
+make build more efficient - builds things multiple times
